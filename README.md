@@ -18,7 +18,45 @@ We want to be able to shutdown sagemaker notebooks automatically, to avoid payin
 
 Tons more details for iterating through [Conda environments](https://docs.aws.amazon.com/sagemaker/latest/dg/notebook-lifecycle-config.html).
 
-Some example scripts from AWS [can be found here](https://docs.aws.amazon.com/sagemaker/latest/dg/notebook-lifecycle-config.html).
+Some example scripts from AWS [can be found here](https://github.com/aws-samples/amazon-sagemaker-notebook-instance-lifecycle-config-samples).
+
+### Recommended Setup
+
+1. Turn off notebook
+1. Create new lifecycle configuration with the below script
+1. Click "Edit" notebook in AWS console, associate lifecycle with notebook
+1. Restart notebook and check CloudWatch logs to make sure it worked
+
+```shell
+#!/bin/bash
+
+set -e
+
+# OVERVIEW
+# This script stops a SageMaker notebook once it's idle for more than 1 hour (default time)
+# You can change the idle time for stop using the environment variable below.
+# If you want the notebook the stop only if no browsers are open, remove the --ignore-connections flag
+#
+# Note that this script will fail if either condition is not met
+#   1. Ensure the Notebook Instance has internet connectivity to fetch the example config
+#   2. Ensure the Notebook Instance execution role permissions to SageMaker:StopNotebookInstance to stop the notebook 
+#       and SageMaker:DescribeNotebookInstance to describe the notebook.
+#
+
+# PARAMETERS
+IDLE_TIME=10800
+
+echo "Fetching the autostop script"
+wget https://raw.githubusercontent.com/aws-samples/amazon-sagemaker-notebook-instance-lifecycle-config-samples/master/scripts/auto-stop-idle/autostop.py
+
+echo "Starting the SageMaker autostop script in cron"
+
+(crontab -l 2>/dev/null; echo "5 * * * * /usr/bin/python $PWD/autostop.py --time $IDLE_TIME --ignore-connections") | crontab -
+```
+
+## Sagemaker Knockout
+
+Seems a promising way to manage and use CPU/GPU load.
 
 Note that if you use the [Sagemaker Knockout](https://github.com/mariokostelac/sagemaker-knockout) starting script, it will fail in the AWS console!
 
@@ -26,11 +64,7 @@ Note that if you use the [Sagemaker Knockout](https://github.com/mariokostelac/s
 
 You have to remove the 🥊 character.
 
-## Adding a Lifecycle Script
-
-You can just add one when you create a notebook.
-
-Otherwise, you need to do a little more work for an existing notebook.
+I haven't been able to make this work yet, pending [this pidfile issue](https://github.com/mariokostelac/sagemaker-knockout/issues/5).
 
 ## Using [AWS Shell](https://github.com/awslabs/aws-shell) to manage
 
@@ -53,16 +87,7 @@ aws_access_key_id = xxxxxx
 aws_secret_access_key = xxxxxxx
 ```
 
-#### Steps to update lifecycle instance for existing notebook
-
-We'll be making use of the [`UpdateNotebookInstance`](https://docs.aws.amazon.com/sagemaker/latest/dg/API_UpdateNotebookInstance.html) API endpoint.
-
-1. Go to Sagemaker AWS Console and create a new Lifecycle configuration
-1. Associate that configuration with the notebook using the AWS Shell (see below)
-1. Restart the notebook!
-1. Check the CloudWatch (`/aws/sagemaker/NotebookInstances`) logs to check that the `echo` or whatever statements ran as a sanity check.
-
-Example using the shell to associate the configuration with the (currently not running) notebook:
+Then in the shell:
 
 ```shell
 aws-shell
@@ -71,7 +96,4 @@ aws> sagemaker update-notebook-instance --lifecycle-config-name my-config --note
 aws> .exit
 ```
 
-
-
-
-
+If you prefer, you can also do this with [`boto3`](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/sagemaker.html#SageMaker.Client.update_notebook_instance).
